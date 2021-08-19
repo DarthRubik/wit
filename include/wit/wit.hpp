@@ -35,22 +35,21 @@ namespace std
 }
 namespace wit
 {
-    // TODO: Perfect forwarding
     template<typename host_t, typename... T>
     host_t create(T... t)
     {
-        return host_t(t...);
+        return host_t(std::forward<T>(t)...);
     }
 
     template<typename host_t, typename int_t, int_t... ints, typename... T>
-    auto create_helper(std::integer_sequence<int_t, ints...>, T... ts)
+    auto create_helper(std::integer_sequence<int_t, ints...>, T&&... ts)
     {
         auto cimpl = create<host_t, std::allocator_arg_t,
-             typename std::tuple_element<(ints+1)%sizeof...(ints),std::tuple<T...>>::type...>;
+             typename std::tuple_element<(ints+1)%sizeof...(ints),std::tuple<T&&...>>::type...>;
         auto x = std::bind(cimpl, std::allocator_arg,
                 placeholder<((ints + 1) % sizeof...(ints))+1>{}...);
 
-        return x(ts...);
+        return x(std::forward<T>(ts)...);
     }
 
     template<typename host_t>
@@ -64,16 +63,18 @@ namespace wit
 
         template<typename... T,
             typename V=std::enable_if_t<
-                std::is_same<get_last_t<T...>, allocator_type>::value
+                std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value
             >,
             typename U = V
         >
         wit(T&&... t)
-            : host_t(create_helper<host_t>(std::make_index_sequence<sizeof...(T)>{}, t...)) {}
+            : host_t(create_helper<host_t>(
+                        std::make_index_sequence<sizeof...(T)>{},
+                        std::forward<T>(t)...)) {}
 
         template<typename... T,
             typename=std::enable_if_t<
-                !std::is_same<get_last_t<T...>, allocator_type>::value
+                !std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value
             >
         >
         wit(T&&... t) :

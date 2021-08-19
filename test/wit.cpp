@@ -18,14 +18,26 @@ using alloc_aware = wit::wit<alloc_aware_impl<>>;
 
 int main()
 {
+    auto alloc = std::allocator<char>();
+
     alloc_aware x;
     assert(x.str == "");
 
-    alloc_aware y = "test";
-    assert(y.str == "test");
+    x = alloc_aware(std::move(alloc));
+    assert(x.str == "");
+    x = alloc_aware(alloc);
+    assert(x.str == "");
 
-    alloc_aware z("test2", std::allocator<char>());
-    assert(z.str == "test2");
+    x = "test";
+    assert(x.str == "test");
 
-    assert(true);
+    x = alloc_aware("test2", std::move(alloc));
+    assert(x.str == "test2");
+    x = alloc_aware("test2", alloc);
+    assert(x.str == "test2");
+
+    x = alloc_aware(std::allocator_arg, std::move(alloc), "test3");
+    assert(x.str == "test3");
+    x = alloc_aware(std::allocator_arg, alloc, "test3");
+    assert(x.str == "test3");
 }
