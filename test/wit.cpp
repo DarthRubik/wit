@@ -2,6 +2,66 @@
 #include <cassert>
 #include <memory>
 
+template<typename T, typename POCC, typename POCCA, typename POCMA, typename POCS>
+struct debug_allocator
+{
+    std::string id;
+    using value_type = T;
+
+    debug_allocator() : id("default") {}
+    debug_allocator(std::string id) : id(std::move(id)) {}
+
+    template <class U>
+    debug_allocator(debug_allocator<U, POCC, POCCA, POCMA, POCS> const& other)
+        : id(other.id) {}
+
+    // Allocators move constructor must not actually move (call the copy
+    // construct)
+    template <class U>
+    debug_allocator(debug_allocator<U, POCC, POCCA, POCMA, POCS>&& other)
+        : debug_allocator(other) {}
+
+    T* allocate(std::size_t n)
+    {
+        return static_cast<T*>(operator new (n*sizeof(value_type)));
+    }
+
+    void deallocate(T* p, std::size_t) noexcept
+    {
+        operator delete(p);
+    }
+
+    debug_allocator select_on_container_copy_construction() const
+    {
+        if (POCC::value)
+        {
+            return *this;
+        }
+        else
+        {
+            return debug_allocator();
+        }
+    }
+
+    using propagate_on_container_copy_assignment = POCCA;
+    using propagate_on_container_move_assignment = POCMA;
+    using propagate_on_container_swap            = POCS;
+};
+
+template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, typename POCS>
+bool operator==(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
+                debug_allocator<U, POCC, POCCA, POCMA, POCS> const& y) noexcept
+{
+    return x.id == y.id;
+}
+
+template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, typename POCS>
+bool operator!=(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
+                debug_allocator<U, POCC, POCCA, POCMA, POCS> const& y) noexcept
+{
+    return !(x == y);
+}
+
 template<typename Alloc = std::allocator<char>>
 struct alloc_aware_impl
 {
@@ -21,9 +81,9 @@ struct alloc_aware_impl
         : str(other.str, a) {}
 };
 
-using alloc_aware = wit::wit<alloc_aware_impl<>>;
 
-int main()
+template<typename alloc_aware>
+void smoke_test()
 {
     auto alloc = std::allocator<char>();
 
@@ -65,6 +125,41 @@ int main()
     x.str = "test3";
     y = alloc_aware(std::move(x), alloc);
     assert(y.str == "test3");
+
+}
+template<template<class> class alloc_aware>
+void test_copy_construct()
+{
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+
+        alloc_aware<a> x = a("a1");
+        assert(x.get_allocator().id == "a1");
+
+        alloc_aware<a> y = x;
+        assert(y.get_allocator().id == "default");
+
+        alloc_aware<a> z = alloc_aware<a>(x, a("a2"));
+        assert(z.get_allocator().id == "a2");
+    }
+    {
+        using a = debug_allocator<
+            char, std::true_type, std::false_type, std::false_type, std::false_type>;
+
+        alloc_aware<a> x = a("a1");
+        alloc_aware<a> y = x;
+        assert(y.get_allocator().id == "a1");
+    }
+}
+
+template<typename Alloc>
+using alloc_aware = wit::wit<alloc_aware_impl<Alloc>>;
+
+int main()
+{
+    smoke_test<alloc_aware<std::allocator<char>>>();
+    test_copy_construct<alloc_aware>();
 }
 
 
