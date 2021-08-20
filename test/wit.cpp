@@ -153,6 +153,23 @@ void test_copy_construct()
     }
 }
 
+template<template<class> class alloc_aware>
+void test_move_construct()
+{
+    using a = debug_allocator<
+        char, std::false_type, std::false_type, std::false_type, std::false_type>;
+
+    alloc_aware<a> x = a("a1");
+    assert(x.get_allocator().id == "a1");
+
+    alloc_aware<a> y = std::move(x);
+    assert(y.get_allocator().id == "a1");
+
+    x = a("a1");
+    alloc_aware<a> z = alloc_aware<a>(std::move(x), a("a2"));
+    assert(z.get_allocator().id == "a2");
+}
+
 template<typename Alloc>
 using alloc_aware = wit::wit<alloc_aware_impl<Alloc>>;
 
@@ -160,6 +177,7 @@ int main()
 {
     smoke_test<alloc_aware<std::allocator<char>>>();
     test_copy_construct<alloc_aware>();
+    test_move_construct<alloc_aware>();
 }
 
 
