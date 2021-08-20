@@ -83,6 +83,14 @@ namespace wit
             : host_t(other, a)
         {}
 
+        wit(wit&& other) = default;
+        wit(wit&& other, allocator_type const& a)
+            : host_t(a == other.get_allocator()
+                    ? host_t(std::move(other)) : host_t(other, a)) {}
+
+        wit& operator=(wit const&) = default; // FIXME: Stand ins for now
+        wit& operator=(wit&&) = default;
+
         template<typename... T>
         wit(std::allocator_arg_t, allocator_type a, T&&... t) :
             host_t(std::allocator_arg, a, std::forward<T>(t)...) {}

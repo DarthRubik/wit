@@ -55,4 +55,16 @@ int main()
     assert(y.str == "test3");
     y = alloc_aware(x, alloc);
     assert(y.str == "test3");
+
+    y = std::move(x);
+    assert(y.str == "test3");
+
+    x.str = "test3";
+    y = alloc_aware(std::move(x), std::move(alloc));
+    assert(y.str == "test3");
+    x.str = "test3";
+    y = alloc_aware(std::move(x), alloc);
+    assert(y.str == "test3");
 }
+
+
