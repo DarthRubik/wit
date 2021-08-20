@@ -24,6 +24,18 @@ namespace wit
     template<typename... T>
     using get_last_t = typename get_last<T...>::type;
 
+    template<typename... Ts>
+    struct get_first {};
+
+    template<typename F, typename... Rest>
+    struct get_first<F, Rest...> { using type = F; };
+
+    template<>
+    struct get_first<> { using type = void; };
+
+    template<typename... T>
+    using get_first_t = typename get_first<T...>::type;
+
     template<int index>
     struct placeholder {};
 }
@@ -57,13 +69,28 @@ namespace wit
     {
         using allocator_type = typename host_t::allocator_type;
 
+    private:
+        using traits = std::allocator_traits<allocator_type>;
+
+    public:
+
+        wit(wit const& other)
+            : host_t(other,
+                traits::select_on_container_copy_construction(other.get_allocator()))
+        {}
+
+        wit(wit const& other, allocator_type const& a)
+            : host_t(other, a)
+        {}
+
         template<typename... T>
         wit(std::allocator_arg_t, allocator_type a, T&&... t) :
             host_t(std::allocator_arg, a, std::forward<T>(t)...) {}
 
         template<typename... T,
             typename V=std::enable_if_t<
-                std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value
+                std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value &&
+                !std::is_same<std::decay_t<get_first_t<T...>>, wit>::value
             >,
             typename U = V
         >
@@ -74,7 +101,8 @@ namespace wit
 
         template<typename... T,
             typename=std::enable_if_t<
-                !std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value
+                !std::is_same<std::decay_t<get_last_t<T...>>, allocator_type>::value &&
+                !std::is_same<std::decay_t<get_first_t<T...>>, wit>::value
             >
         >
         wit(T&&... t) :
