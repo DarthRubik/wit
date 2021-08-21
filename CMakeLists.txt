@@ -19,6 +19,7 @@ function(add_test_wit name file)
 endfunction()
 
 include_directories(include)
+include_directories(libs/cma/include)
 add_subdirectory(test)
 
 

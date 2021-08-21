@@ -1,98 +1,22 @@
 #include "wit/wit.hpp"
+#include "cma/debug_allocator.hpp"
 #include <cassert>
 #include <memory>
 #include <cstring>
 #include <map>
 
-struct debug_allocator_info
+
+void fail()
 {
-    // For debug purposes
-    std::string id;
-
-    // Maps allocations to sizes of the array
-    std::map<void*, std::size_t> allocations;
-
-    ~debug_allocator_info()
-    {
-        // When we are deleted, we should have no allocations left
-        assert(allocations.empty());
-    }
-};
-
-template<typename T, typename POCC, typename POCCA, typename POCMA, typename POCS>
-struct debug_allocator
-{
-    // So that copying it extends the life of the "info"
-    std::shared_ptr<debug_allocator_info> info;
-    using value_type = T;
-
-    std::string id() const
-    {
-        return info->id;
-    }
-
-    debug_allocator() : debug_allocator("default") {}
-    debug_allocator(std::string id)
-        : info(new debug_allocator_info{std::move(id)}) {}
-
-    template <class U>
-    debug_allocator(debug_allocator<U, POCC, POCCA, POCMA, POCS> const& other)
-        : info(other.info) {}
-
-    // Allocators move constructor must not actually move (call the copy
-    // construct)
-    template <class U>
-    debug_allocator(debug_allocator<U, POCC, POCCA, POCMA, POCS>&& other)
-        : debug_allocator(other) {}
-
-    T* allocate(std::size_t n)
-    {
-        T* ret = static_cast<T*>(operator new (n*sizeof(value_type)));
-
-        // Keep a record of this
-        this->info->allocations[ret] = n;
-
-        return ret;
-    }
-
-    void deallocate(T* p, std::size_t n) noexcept
-    {
-        assert(this->info->allocations.find(p) != std::cend(this->info->allocations));
-        assert(this->info->allocations[p] == n);
-        this->info->allocations.erase(p);
-        operator delete(p);
-    }
-
-    debug_allocator select_on_container_copy_construction() const
-    {
-        if (POCC::value)
-        {
-            return *this;
-        }
-        else
-        {
-            return debug_allocator();
-        }
-    }
-
-    using propagate_on_container_copy_assignment = POCCA;
-    using propagate_on_container_move_assignment = POCMA;
-    using propagate_on_container_swap            = POCS;
-};
-
-template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, typename POCS>
-bool operator==(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
-                debug_allocator<U, POCC, POCCA, POCMA, POCS> const& y) noexcept
-{
-    return x.info == y.info;
+    assert(false);
 }
 
-template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, typename POCS>
-bool operator!=(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
-                debug_allocator<U, POCC, POCCA, POCMA, POCS> const& y) noexcept
-{
-    return !(x == y);
-}
+template<typename POCC,
+         typename POCCA,
+         typename POCMA,
+         typename POCS>
+using debug_allocator = cma::debug_allocator<char, POCC, POCCA, POCMA, POCS, fail>;
+
 
 template<typename Alloc = std::allocator<char>>
 struct alloc_aware_impl
@@ -200,7 +124,7 @@ void test_copy_construct()
 {
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x("x", a("a1"));
         assert(x.get_allocator().id() == "a1");
@@ -215,7 +139,7 @@ void test_copy_construct()
     }
     {
         using a = debug_allocator<
-            char, std::true_type, std::false_type, std::false_type, std::false_type>;
+            std::true_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y = x;
@@ -227,7 +151,7 @@ template<template<class> class alloc_aware>
 void test_move_construct()
 {
     using a = debug_allocator<
-        char, std::false_type, std::false_type, std::false_type, std::false_type>;
+        std::false_type, std::false_type, std::false_type, std::false_type>;
 
     alloc_aware<a> x("x", a("a1"));
     assert(x.get_allocator().id() == "a1");
@@ -247,7 +171,7 @@ void test_copy_assign()
 {
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y("y", a("a2"));
@@ -258,7 +182,7 @@ void test_copy_assign()
     }
     {
         using a = debug_allocator<
-            char, std::false_type, std::true_type, std::false_type, std::false_type>;
+            std::false_type, std::true_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y("y", a("a2"));
@@ -274,7 +198,7 @@ void test_move_assign()
 {
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y("y", a("a2"));
@@ -285,7 +209,7 @@ void test_move_assign()
     }
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::true_type, std::false_type>;
+            std::false_type, std::false_type, std::true_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y("y", a("a2"));
@@ -296,7 +220,7 @@ void test_move_assign()
     }
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         a alloc = a("a1");
         alloc_aware<a> x = alloc;
@@ -313,7 +237,7 @@ void test_swap()
 {
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x("x", a("a1"));
         alloc_aware<a> y("y", a("a2"));
@@ -327,7 +251,7 @@ void test_swap()
     }
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::true_type>;
+            std::false_type, std::false_type, std::false_type, std::true_type>;
 
         alloc_aware<a> x("x", a("a1"));
         alloc_aware<a> y("y", a("a2"));
@@ -341,7 +265,7 @@ void test_swap()
     }
     {
         using a = debug_allocator<
-            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+            std::false_type, std::false_type, std::false_type, std::false_type>;
 
         a alloc = a("a1");
         alloc_aware<a> x("x", alloc);
