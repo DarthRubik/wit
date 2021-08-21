@@ -50,7 +50,7 @@ namespace wit
     auto rotate_pack(T&&... t)
     {
         return std::get<(index+1)%sizeof...(t)>(
-                std::make_tuple(t...));
+                std::forward_as_tuple(t...));
     }
 
     template<typename host_t>
