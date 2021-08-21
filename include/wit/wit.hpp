@@ -34,11 +34,20 @@ namespace wit
 
     template<typename... T>
     using get_first_t = typename get_first<T...>::type;
-}
-namespace wit
-{
+
+    /*
+     * This basically returns the item at the index rotated.....that is the
+     * list:
+     *
+     * a b c d
+     *
+     * Becomes:
+     *
+     * d a b c
+     *
+     */
     template<std::size_t index, typename... T>
-    auto get_from_pack(T&&... t)
+    auto rotate_pack(T&&... t)
     {
         return std::get<(index+1)%sizeof...(t)>(
                 std::make_tuple(t...));
@@ -72,6 +81,10 @@ namespace wit
             : wit(a == other.get_allocator()
                     ? std::move(other) : wit(other, a)) {}
 
+        /*
+         * This lets us specialize based on which allocator we are supposed to
+         * use
+         */
         static allocator_type p_alloc(wit const& a, wit const& b, std::true_type)
         {
             return a.get_allocator();
@@ -83,6 +96,7 @@ namespace wit
 
         wit& operator=(wit const& other)
         {
+            // Copy using the appropriate allocator
             host_t copy(
                 p_alloc(other,*this,typename traits::propagate_on_container_copy_assignment{}),
                 other);
@@ -96,6 +110,8 @@ namespace wit
             typename = std::enable_if_t<cond::value>>
         wit& operator=(wit&& other)
         {
+            // In the case where we are propagating the allocator on move, then
+            // it is really simple....just swap the two objects
             swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
 
             return *this;
@@ -107,6 +123,15 @@ namespace wit
             typename = std::enable_if_t<!cond::value>>
         wit& operator=(wit&& other)
         {
+            /*
+             * In the case where we are not propagating the allocator, it is
+             * more complicated:
+             *
+             * - If the allocators match, then we do a simple swap,
+             * - Else we are forced to do a copy, so that on deallocate we
+             *   still work
+             *
+             */
             if (other.get_allocator() == this->get_allocator())
             {
                 swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
@@ -120,10 +145,9 @@ namespace wit
             return *this;
         }
 
-
         template<std::size_t... I, typename... T>
         wit(std::integer_sequence<std::size_t, I...>, T&&... t)
-            : host_t(get_from_pack<I>(std::forward<T>(t)...)...) {}
+            : host_t(rotate_pack<I>(std::forward<T>(t)...)...) {}
 
         template<typename... T>
         wit(std::allocator_arg_t, allocator_type a, T&&... t) :

@@ -6,11 +6,15 @@
 
 struct debug_allocator_info
 {
+    // For debug purposes
     std::string id;
+
+    // Maps allocations to sizes of the array
     std::map<void*, std::size_t> allocations;
 
     ~debug_allocator_info()
     {
+        // When we are deleted, we should have no allocations left
         assert(allocations.empty());
     }
 };
@@ -18,6 +22,7 @@ struct debug_allocator_info
 template<typename T, typename POCC, typename POCCA, typename POCMA, typename POCS>
 struct debug_allocator
 {
+    // So that copying it extends the life of the "info"
     std::shared_ptr<debug_allocator_info> info;
     using value_type = T;
 
@@ -44,6 +49,7 @@ struct debug_allocator
     {
         T* ret = static_cast<T*>(operator new (n*sizeof(value_type)));
 
+        // Keep a record of this
         this->info->allocations[ret] = n;
 
         return ret;
@@ -91,19 +97,32 @@ bool operator!=(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
 template<typename Alloc = std::allocator<char>>
 struct alloc_aware_impl
 {
-    using allocator_type = Alloc;
-    allocator_type alloc;
+private:
+    Alloc alloc;
 
     using traits = std::allocator_traits<Alloc>;
 
     static_assert(std::is_same<typename traits::value_type, char>::value, "");
 
+public:
+
+    char* str;
+
+    // These are deleted for the test...They don't need to be in reality
+    alloc_aware_impl(alloc_aware_impl const&) = delete;
+    alloc_aware_impl(alloc_aware_impl&&) = delete;
+    alloc_aware_impl& operator=(alloc_aware_impl const &) = delete;
+    alloc_aware_impl& operator=(alloc_aware_impl&&) = delete;
+
+
+    // The methods and member bellow are the minimum required in order to use
+    // the "wit" adapter
+
+    using allocator_type = Alloc;
     allocator_type get_allocator() const
     {
         return alloc;
     }
-    using string_t = std::basic_string<char, std::char_traits<char>, allocator_type>;
-    char* str;
 
     alloc_aware_impl(Alloc const& a, const char* str = "") : alloc(a)
     {
@@ -120,11 +139,6 @@ struct alloc_aware_impl
         swap(a.str, b.str);
         swap(a.alloc, b.alloc);
     }
-
-    alloc_aware_impl(alloc_aware_impl const&) = delete;
-    alloc_aware_impl(alloc_aware_impl&&) = delete;
-    alloc_aware_impl& operator=(alloc_aware_impl const &) = delete;
-    alloc_aware_impl& operator=(alloc_aware_impl&&) = delete;
 
     ~alloc_aware_impl()
     {
