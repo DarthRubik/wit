@@ -202,14 +202,16 @@ void test_copy_construct()
         using a = debug_allocator<
             char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
-        alloc_aware<a> x = a("a1");
+        alloc_aware<a> x("x", a("a1"));
         assert(x.get_allocator().id() == "a1");
 
         alloc_aware<a> y = x;
         assert(y.get_allocator().id() == "default");
+        assert(std::string(y.str) == "x");
 
         alloc_aware<a> z = alloc_aware<a>(x, a("a2"));
         assert(z.get_allocator().id() == "a2");
+        assert(std::string(z.str) == "x");
     }
     {
         using a = debug_allocator<
@@ -227,14 +229,16 @@ void test_move_construct()
     using a = debug_allocator<
         char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
-    alloc_aware<a> x = a("a1");
+    alloc_aware<a> x("x", a("a1"));
     assert(x.get_allocator().id() == "a1");
 
     alloc_aware<a> y = std::move(x);
+    assert(std::string(y.str) == "x");
     assert(y.get_allocator().id() == "a1");
 
-    x = a("a1");
+    x = alloc_aware<a>("x", a("a1"));
     alloc_aware<a> z = alloc_aware<a>(std::move(x), a("a2"));
+    assert(std::string(z.str) == "x");
     assert(z.get_allocator().id() == "a2");
 }
 
@@ -246,9 +250,10 @@ void test_copy_assign()
             char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
-        alloc_aware<a> y = a("a2");
+        alloc_aware<a> y("y", a("a2"));
 
         x = y;
+        assert(std::string(x.str) == "y");
         assert(x.get_allocator().id() == "a1");
     }
     {
@@ -256,9 +261,10 @@ void test_copy_assign()
             char, std::false_type, std::true_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
-        alloc_aware<a> y = a("a2");
+        alloc_aware<a> y("y", a("a2"));
 
         x = y;
+        assert(std::string(x.str) == "y");
         assert(x.get_allocator().id() == "a2");
     }
 }
@@ -271,9 +277,10 @@ void test_move_assign()
             char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
-        alloc_aware<a> y = a("a2");
+        alloc_aware<a> y("y", a("a2"));
 
         x = std::move(y);
+        assert(std::string(x.str) == "y");
         assert(x.get_allocator().id() == "a1");
     }
     {
@@ -281,9 +288,10 @@ void test_move_assign()
             char, std::false_type, std::false_type, std::true_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
-        alloc_aware<a> y = a("a2");
+        alloc_aware<a> y("y", a("a2"));
 
         x = std::move(y);
+        assert(std::string(x.str) == "y");
         assert(x.get_allocator().id() == "a2");
     }
     {
@@ -292,9 +300,10 @@ void test_move_assign()
 
         a alloc = a("a1");
         alloc_aware<a> x = alloc;
-        alloc_aware<a> y = alloc;
+        alloc_aware<a> y("y", alloc);
 
         x = std::move(y);
+        assert(std::string(x.str) == "y");
         assert(x.get_allocator().id() == "a1");
     }
 }
