@@ -132,7 +132,10 @@ public:
     alloc_aware_impl(Alloc const& a, alloc_aware_impl const& other)
         : alloc_aware_impl(a, other.str) {}
 
-    friend void swap(alloc_aware_impl& a, alloc_aware_impl& b)
+    // Implements a "real" swap, that always propogates allocators.....the wit
+    // adapter will the decide what the allocator wants to do and respond
+    // appropriately
+    friend void really_swap(alloc_aware_impl& a, alloc_aware_impl& b)
     {
         using std::swap;
 
@@ -296,6 +299,54 @@ void test_move_assign()
     }
 }
 
+template<template<class> class alloc_aware>
+void test_swap()
+{
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+
+        alloc_aware<a> x("x", a("a1"));
+        alloc_aware<a> y("y", a("a2"));
+
+        swap(x, y);
+
+        assert(std::string(x.str) == "y");
+        assert(std::string(y.str) == "x");
+        assert(x.get_allocator().id() == "a1");
+        assert(y.get_allocator().id() == "a2");
+    }
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::false_type, std::false_type, std::true_type>;
+
+        alloc_aware<a> x("x", a("a1"));
+        alloc_aware<a> y("y", a("a2"));
+
+        swap(x, y);
+
+        assert(std::string(x.str) == "y");
+        assert(std::string(y.str) == "x");
+        assert(x.get_allocator().id() == "a2");
+        assert(y.get_allocator().id() == "a1");
+    }
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+
+        a alloc = a("a1");
+        alloc_aware<a> x("x", alloc);
+        alloc_aware<a> y("y", alloc);
+
+        swap(x, y);
+
+        assert(std::string(x.str) == "y");
+        assert(std::string(y.str) == "x");
+        assert(x.get_allocator().id() == "a1");
+        assert(y.get_allocator().id() == "a1");
+    }
+}
+
 template<typename Alloc>
 using alloc_aware = wit::wit<alloc_aware_impl<Alloc>>;
 
@@ -306,6 +357,7 @@ int main()
     test_move_construct<alloc_aware>();
     test_copy_assign<alloc_aware>();
     test_move_assign<alloc_aware>();
+    test_swap<alloc_aware>();
 }
 
 

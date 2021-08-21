@@ -74,7 +74,7 @@ namespace wit
 
         wit(wit&& other) : wit()
         {
-            swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+            really_swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
         }
 
         wit(wit&& other, allocator_type const& a)
@@ -94,13 +94,44 @@ namespace wit
             return b.get_allocator();
         }
 
+        template<
+            typename cond = typename traits::propagate_on_container_swap,
+            typename = std::enable_if_t<cond::value>>
+        friend void swap(wit& a, wit& b)
+        {
+            really_swap(a, b);
+        }
+
+        template<
+            typename cond = typename traits::propagate_on_container_swap,
+            typename = cond,
+            typename = std::enable_if_t<!cond::value>>
+        friend void swap(wit& a, wit& b)
+        {
+            if (a.get_allocator() == b.get_allocator())
+            {
+                really_swap(a, b);
+            }
+            else
+            {
+                host_t copy_a(b.get_allocator(), a);
+                host_t copy_b(a.get_allocator(), b);
+
+                // b should end with a's contents, but its original allocator
+                really_swap(b, copy_a);
+
+                // a should end with b's contents, but its original allocator
+                really_swap(a, copy_b);
+            }
+        }
+
         wit& operator=(wit const& other)
         {
             // Copy using the appropriate allocator
             host_t copy(
                 p_alloc(other,*this,typename traits::propagate_on_container_copy_assignment{}),
                 other);
-            swap(static_cast<host_t&>(*this), copy);
+            really_swap(static_cast<host_t&>(*this), copy);
 
             return *this;
         }
@@ -112,7 +143,7 @@ namespace wit
         {
             // In the case where we are propagating the allocator on move, then
             // it is really simple....just swap the two objects
-            swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+            really_swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
 
             return *this;
         }
@@ -134,12 +165,12 @@ namespace wit
              */
             if (other.get_allocator() == this->get_allocator())
             {
-                swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+                really_swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
             }
             else
             {
                 host_t copy(this->get_allocator(), other);
-                swap(copy, static_cast<host_t&>(*this));
+                really_swap(copy, static_cast<host_t&>(*this));
             }
 
             return *this;
