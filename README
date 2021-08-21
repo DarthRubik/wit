@@ -1,0 +1,119 @@
+Custom Allocator Aware containers made easy with "wit"
+
+Have you ever looked at the allocator specification and thought about how hard
+it would be to implement properly all of the different corner cases.....
+
+Or have you ever implemented several allocator aware containers, and reallized
+that you are literally writing the same code over and over.....
+
+Well look no further......This library lets you write 2 constructors, a swap
+function, a destructor and that is it......It will generate all of the other
+functions for you.....
+
+For instance shown below is bare bones string implementation:
+
+
+    template<typename Alloc = std::allocator<char>>
+    struct my_string_impl
+    {
+    private:
+        Alloc alloc;
+
+        using traits = std::allocator_traits<Alloc>;
+
+        static_assert(std::is_same<typename traits::value_type, char>::value, "");
+
+    public:
+
+        char* str;
+
+        // These are deleted for the test...They don't need to be in reality
+        my_string_impl(my_string_impl const&) = delete;
+        my_string_impl(my_string_impl&&) = delete;
+        my_string_impl& operator=(my_string_impl const &) = delete;
+        my_string_impl& operator=(my_string_impl&&) = delete;
+
+
+        // The methods and member bellow are the minimum required in order to use
+        // the "wit" adapter
+
+        using allocator_type = Alloc;
+        allocator_type get_allocator() const
+        {
+            return alloc;
+        }
+
+        my_string_impl(Alloc const& a, const char* str = "") : alloc(a)
+        {
+            this->str = traits::allocate(alloc, std::strlen(str) + 1);
+            std::strcpy(this->str, str);
+        }
+        my_string_impl(Alloc const& a, my_string_impl const& other)
+            : my_string_impl(a, other.str) {}
+
+        // Implements a "real" swap, that always propogates allocators.....the
+        // wit adapter will the decide what the allocator wants to do and
+        // respond appropriately
+        friend void really_swap(my_string_impl& a, my_string_impl& b)
+        {
+            using std::swap;
+
+            swap(a.str, b.str);
+            swap(a.alloc, b.alloc);
+        }
+
+        ~my_string_impl()
+        {
+            traits::deallocate(alloc, this->str, std::strlen(this->str)+1);
+        }
+    };
+
+    template<typename Alloc = std::allocator<char>>
+    using my_string = my_string_impl<Alloc>;
+
+Any now my_string has all of the constructors/operator= that you would expect:
+
+    // Constructs with alloc == Alloc() and str == ""
+    my_string();
+
+    // Constructs with alloc == a and str == ""
+    my_string(Alloc const& a);
+
+    // Constructs with alloc == a and str == s
+    my_string(char const* s, Alloc const& a);
+
+    // Constructs with alloc == Alloc() and str == s
+    my_string(char const* s);
+
+    // Copys from other string and uses the allocator as defined by
+    // select_on_container_copy_construction
+    my_string(my_string const&);
+
+    // Copys from other string and alloc == a
+    my_string(my_string const&, Alloc const& a);
+
+    // Moves from other string
+    my_string(my_string &&);
+
+    // Moves from other string and uses the allocator a (which means that
+    // sometimes this is not as simple as stealing the internals of the other
+    // one)
+    my_string(my_string &&, Alloc const& a);
+
+    // Copys from the other string and uses the allocator defined by
+    // propagate_on_container_copy_assignment
+    my_string& operator=(my_string const&);
+
+    // Trys to move from the other string (always successfull
+    // if propagate_on_container_move_assignment, else it will sometimes be
+    // needed to copy)
+    my_string& operator=(my_string&&);
+
+And it also adds a free swap function that respects propagate_on_container_swap
+
+Why is this named wit?
+
+It is named wit because having your "wits" around you means you are aware of
+your surroundings (among other things).....So it is supposed have some sort of
+reference to "allocator aware"ness....I may change the name later if this is
+too lame
