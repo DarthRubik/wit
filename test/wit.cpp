@@ -2,19 +2,37 @@
 #include <cassert>
 #include <memory>
 #include <cstring>
+#include <map>
+
+struct debug_allocator_info
+{
+    std::string id;
+    std::map<void*, std::size_t> allocations;
+
+    ~debug_allocator_info()
+    {
+        assert(allocations.empty());
+    }
+};
 
 template<typename T, typename POCC, typename POCCA, typename POCMA, typename POCS>
 struct debug_allocator
 {
-    std::string id;
+    std::shared_ptr<debug_allocator_info> info;
     using value_type = T;
 
-    debug_allocator() : id("default") {}
-    debug_allocator(std::string id) : id(std::move(id)) {}
+    std::string id() const
+    {
+        return info->id;
+    }
+
+    debug_allocator() : debug_allocator("default") {}
+    debug_allocator(std::string id)
+        : info(new debug_allocator_info{std::move(id)}) {}
 
     template <class U>
     debug_allocator(debug_allocator<U, POCC, POCCA, POCMA, POCS> const& other)
-        : id(other.id) {}
+        : info(other.info) {}
 
     // Allocators move constructor must not actually move (call the copy
     // construct)
@@ -24,11 +42,18 @@ struct debug_allocator
 
     T* allocate(std::size_t n)
     {
-        return static_cast<T*>(operator new (n*sizeof(value_type)));
+        T* ret = static_cast<T*>(operator new (n*sizeof(value_type)));
+
+        this->info->allocations[ret] = n;
+
+        return ret;
     }
 
-    void deallocate(T* p, std::size_t) noexcept
+    void deallocate(T* p, std::size_t n) noexcept
     {
+        assert(this->info->allocations.find(p) != std::cend(this->info->allocations));
+        assert(this->info->allocations[p] == n);
+        this->info->allocations.erase(p);
         operator delete(p);
     }
 
@@ -53,7 +78,7 @@ template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, 
 bool operator==(debug_allocator<T, POCC, POCCA, POCMA, POCS> const& x,
                 debug_allocator<U, POCC, POCCA, POCMA, POCS> const& y) noexcept
 {
-    return x.id == y.id;
+    return x.info == y.info;
 }
 
 template<typename T, typename U, typename POCC, typename POCCA, typename POCMA, typename POCS>
@@ -161,13 +186,13 @@ void test_copy_construct()
             char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
         alloc_aware<a> x = a("a1");
-        assert(x.get_allocator().id == "a1");
+        assert(x.get_allocator().id() == "a1");
 
         alloc_aware<a> y = x;
-        assert(y.get_allocator().id == "default");
+        assert(y.get_allocator().id() == "default");
 
         alloc_aware<a> z = alloc_aware<a>(x, a("a2"));
-        assert(z.get_allocator().id == "a2");
+        assert(z.get_allocator().id() == "a2");
     }
     {
         using a = debug_allocator<
@@ -175,7 +200,7 @@ void test_copy_construct()
 
         alloc_aware<a> x = a("a1");
         alloc_aware<a> y = x;
-        assert(y.get_allocator().id == "a1");
+        assert(y.get_allocator().id() == "a1");
     }
 }
 
@@ -186,14 +211,14 @@ void test_move_construct()
         char, std::false_type, std::false_type, std::false_type, std::false_type>;
 
     alloc_aware<a> x = a("a1");
-    assert(x.get_allocator().id == "a1");
+    assert(x.get_allocator().id() == "a1");
 
     alloc_aware<a> y = std::move(x);
-    assert(y.get_allocator().id == "a1");
+    assert(y.get_allocator().id() == "a1");
 
     x = a("a1");
     alloc_aware<a> z = alloc_aware<a>(std::move(x), a("a2"));
-    assert(z.get_allocator().id == "a2");
+    assert(z.get_allocator().id() == "a2");
 }
 
 template<template<class> class alloc_aware>
@@ -207,7 +232,7 @@ void test_copy_assign()
         alloc_aware<a> y = a("a2");
 
         x = y;
-        assert(x.get_allocator().id == "a1");
+        assert(x.get_allocator().id() == "a1");
     }
     {
         using a = debug_allocator<
@@ -217,7 +242,7 @@ void test_copy_assign()
         alloc_aware<a> y = a("a2");
 
         x = y;
-        assert(x.get_allocator().id == "a2");
+        assert(x.get_allocator().id() == "a2");
     }
 }
 
