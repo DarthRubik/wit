@@ -105,13 +105,13 @@ struct alloc_aware_impl
     using string_t = std::basic_string<char, std::char_traits<char>, allocator_type>;
     char* str;
 
-    alloc_aware_impl(std::allocator_arg_t, Alloc const& a, const char* str = "") : alloc(a)
+    alloc_aware_impl(Alloc const& a, const char* str = "") : alloc(a)
     {
         this->str = traits::allocate(alloc, std::strlen(str) + 1);
         std::strcpy(this->str, str);
     }
-    alloc_aware_impl(alloc_aware_impl const& other, Alloc const& a)
-        : alloc_aware_impl(std::allocator_arg, a, other.str) {}
+    alloc_aware_impl(Alloc const& a, alloc_aware_impl const& other)
+        : alloc_aware_impl(a, other.str) {}
 
     friend void swap(alloc_aware_impl& a, alloc_aware_impl& b)
     {

@@ -55,12 +55,12 @@ namespace wit
     public:
 
         wit(wit const& other)
-            : host_t(other,
-                traits::select_on_container_copy_construction(other.get_allocator()))
+            : host_t(
+                traits::select_on_container_copy_construction(other.get_allocator()), other)
         {}
 
         wit(wit const& other, allocator_type const& a)
-            : host_t(other, a)
+            : host_t(a, other)
         {}
 
         wit(wit&& other) : wit()
@@ -83,8 +83,9 @@ namespace wit
 
         wit& operator=(wit const& other)
         {
-            host_t copy(other,
-                p_alloc(other,*this,typename traits::propagate_on_container_copy_assignment{}));
+            host_t copy(
+                p_alloc(other,*this,typename traits::propagate_on_container_copy_assignment{}),
+                other);
             swap(static_cast<host_t&>(*this), copy);
 
             return *this;
@@ -112,7 +113,7 @@ namespace wit
             }
             else
             {
-                host_t copy(other, this->get_allocator());
+                host_t copy(this->get_allocator(), other);
                 swap(copy, static_cast<host_t&>(*this));
             }
 
@@ -122,11 +123,11 @@ namespace wit
 
         template<std::size_t... I, typename... T>
         wit(std::integer_sequence<std::size_t, I...>, T&&... t)
-            : host_t(std::allocator_arg, get_from_pack<I>(std::forward<T>(t)...)...) {}
+            : host_t(get_from_pack<I>(std::forward<T>(t)...)...) {}
 
         template<typename... T>
         wit(std::allocator_arg_t, allocator_type a, T&&... t) :
-            host_t(std::allocator_arg, a, std::forward<T>(t)...) {}
+            host_t(a, std::forward<T>(t)...) {}
 
         template<typename... T,
             typename V=std::enable_if_t<
@@ -145,7 +146,7 @@ namespace wit
             >
         >
         wit(T&&... t) :
-            host_t(std::allocator_arg, allocator_type(), std::forward<T>(t)...) {}
+            host_t(allocator_type(), std::forward<T>(t)...) {}
     };
 }
 
