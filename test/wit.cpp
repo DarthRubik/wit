@@ -1,6 +1,7 @@
 #include "wit/wit.hpp"
 #include <cassert>
 #include <memory>
+#include <cstring>
 
 template<typename T, typename POCC, typename POCCA, typename POCMA, typename POCS>
 struct debug_allocator
@@ -66,19 +67,44 @@ template<typename Alloc = std::allocator<char>>
 struct alloc_aware_impl
 {
     using allocator_type = Alloc;
+    allocator_type alloc;
+
+    using traits = std::allocator_traits<Alloc>;
+
+    static_assert(std::is_same<typename traits::value_type, char>::value, "");
 
     allocator_type get_allocator() const
     {
-        return str.get_allocator();
+        return alloc;
     }
     using string_t = std::basic_string<char, std::char_traits<char>, allocator_type>;
-    string_t str;
+    char* str;
 
-    alloc_aware_impl(std::allocator_arg_t, Alloc const& a, const char* str = "") : str(str, a)
+    alloc_aware_impl(std::allocator_arg_t, Alloc const& a, const char* str = "") : alloc(a)
     {
+        this->str = traits::allocate(alloc, std::strlen(str) + 1);
+        std::strcpy(this->str, str);
     }
     alloc_aware_impl(alloc_aware_impl const& other, Alloc const& a)
-        : str(other.str, a) {}
+        : alloc_aware_impl(std::allocator_arg, a, other.str) {}
+
+    friend void swap(alloc_aware_impl& a, alloc_aware_impl& b)
+    {
+        using std::swap;
+
+        swap(a.str, b.str);
+        swap(a.alloc, b.alloc);
+    }
+
+    alloc_aware_impl(alloc_aware_impl const&) = delete;
+    alloc_aware_impl(alloc_aware_impl&&) = delete;
+    alloc_aware_impl& operator=(alloc_aware_impl const &) = delete;
+    alloc_aware_impl& operator=(alloc_aware_impl&&) = delete;
+
+    ~alloc_aware_impl()
+    {
+        traits::deallocate(alloc, this->str, std::strlen(this->str)+1);
+    }
 };
 
 
@@ -88,43 +114,43 @@ void smoke_test()
     auto alloc = std::allocator<char>();
 
     alloc_aware x;
-    assert(x.str == "");
+    assert(std::string(x.str) == "");
 
     x = alloc_aware(std::move(alloc));
-    assert(x.str == "");
+    assert(std::string(x.str) == "");
     x = alloc_aware(alloc);
-    assert(x.str == "");
+    assert(std::string(x.str) == "");
 
     x = "test";
-    assert(x.str == "test");
+    assert(std::string(x.str) == "test");
 
     x = alloc_aware("test2", std::move(alloc));
-    assert(x.str == "test2");
+    assert(std::string(x.str) == "test2");
     x = alloc_aware("test2", alloc);
-    assert(x.str == "test2");
+    assert(std::string(x.str) == "test2");
 
     x = alloc_aware(std::allocator_arg, std::move(alloc), "test3");
-    assert(x.str == "test3");
+    assert(std::string(x.str) == "test3");
     x = alloc_aware(std::allocator_arg, alloc, "test3");
-    assert(x.str == "test3");
+    assert(std::string(x.str) == "test3");
 
     alloc_aware y = x;
-    assert(y.str == "test3");
+    assert(std::string(y.str) == "test3");
 
     y = alloc_aware(x, std::move(alloc));
-    assert(y.str == "test3");
+    assert(std::string(y.str) == "test3");
     y = alloc_aware(x, alloc);
-    assert(y.str == "test3");
+    assert(std::string(y.str) == "test3");
 
     y = std::move(x);
-    assert(y.str == "test3");
+    assert(std::string(y.str) == "test3");
 
-    x.str = "test3";
+    x = alloc_aware("test3");
     y = alloc_aware(std::move(x), std::move(alloc));
-    assert(y.str == "test3");
-    x.str = "test3";
+    assert(std::string(y.str) == "test3");
+    x = alloc_aware("test3");
     y = alloc_aware(std::move(x), alloc);
-    assert(y.str == "test3");
+    assert(std::string(y.str) == "test3");
 
 }
 template<template<class> class alloc_aware>
@@ -170,6 +196,31 @@ void test_move_construct()
     assert(z.get_allocator().id == "a2");
 }
 
+template<template<class> class alloc_aware>
+void test_copy_assign()
+{
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::false_type, std::false_type, std::false_type>;
+
+        alloc_aware<a> x = a("a1");
+        alloc_aware<a> y = a("a2");
+
+        x = y;
+        assert(x.get_allocator().id == "a1");
+    }
+    {
+        using a = debug_allocator<
+            char, std::false_type, std::true_type, std::false_type, std::false_type>;
+
+        alloc_aware<a> x = a("a1");
+        alloc_aware<a> y = a("a2");
+
+        x = y;
+        assert(x.get_allocator().id == "a2");
+    }
+}
+
 template<typename Alloc>
 using alloc_aware = wit::wit<alloc_aware_impl<Alloc>>;
 
@@ -178,6 +229,7 @@ int main()
     smoke_test<alloc_aware<std::allocator<char>>>();
     test_copy_construct<alloc_aware>();
     test_move_construct<alloc_aware>();
+    test_copy_assign<alloc_aware>();
 }
 
 

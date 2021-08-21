@@ -3,7 +3,6 @@
 #include <memory>
 #include <type_traits>
 #include <tuple>
-#include <functional>
 
 namespace wit
 {
@@ -35,33 +34,14 @@ namespace wit
 
     template<typename... T>
     using get_first_t = typename get_first<T...>::type;
-
-    template<int index>
-    struct placeholder {};
-}
-namespace std
-{
-    template<int index>
-    struct is_placeholder<wit::placeholder<index>>
-        : integral_constant<int, index> {};
 }
 namespace wit
 {
-    template<typename host_t, typename... T>
-    host_t create(T... t)
+    template<std::size_t index, typename... T>
+    auto get_from_pack(T&&... t)
     {
-        return host_t(std::forward<T>(t)...);
-    }
-
-    template<typename host_t, typename int_t, int_t... ints, typename... T>
-    auto create_helper(std::integer_sequence<int_t, ints...>, T&&... ts)
-    {
-        auto cimpl = create<host_t, std::allocator_arg_t,
-             typename std::tuple_element<(ints+1)%sizeof...(ints),std::tuple<T&&...>>::type...>;
-        auto x = std::bind(cimpl, std::allocator_arg,
-                placeholder<((ints + 1) % sizeof...(ints))+1>{}...);
-
-        return x(std::forward<T>(ts)...);
+        return std::get<(index+1)%sizeof...(t)>(
+                std::make_tuple(t...));
     }
 
     template<typename host_t>
@@ -83,13 +63,44 @@ namespace wit
             : host_t(other, a)
         {}
 
-        wit(wit&& other) = default;
-        wit(wit&& other, allocator_type const& a)
-            : host_t(a == other.get_allocator()
-                    ? host_t(std::move(other)) : host_t(other, a)) {}
+        wit(wit&& other) : wit()
+        {
+            swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+        }
 
-        wit& operator=(wit const&) = default; // FIXME: Stand ins for now
-        wit& operator=(wit&&) = default;
+        wit(wit&& other, allocator_type const& a)
+            : wit(a == other.get_allocator()
+                    ? std::move(other) : wit(other, a)) {}
+
+        static allocator_type p_alloc(wit const& a, wit const& b, std::true_type)
+        {
+            return a.get_allocator();
+        }
+        static allocator_type p_alloc(wit const& a, wit const& b, std::false_type)
+        {
+            return b.get_allocator();
+        }
+
+        wit& operator=(wit const& other)
+        {
+            host_t copy(other,
+                p_alloc(other,*this,typename traits::propagate_on_container_copy_assignment{}));
+            swap(static_cast<host_t&>(*this), copy);
+
+            return *this;
+        }
+
+        wit& operator=(wit&& other)
+        {
+            swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+
+            return *this;
+        }
+
+
+        template<std::size_t... I, typename... T>
+        wit(std::integer_sequence<std::size_t, I...>, T&&... t)
+            : host_t(std::allocator_arg, get_from_pack<I>(std::forward<T>(t)...)...) {}
 
         template<typename... T>
         wit(std::allocator_arg_t, allocator_type a, T&&... t) :
@@ -103,9 +114,7 @@ namespace wit
             typename U = V
         >
         wit(T&&... t)
-            : host_t(create_helper<host_t>(
-                        std::make_index_sequence<sizeof...(T)>{},
-                        std::forward<T>(t)...)) {}
+            : wit(std::make_index_sequence<sizeof...(T)>{}, std::forward<T>(t)...) {}
 
         template<typename... T,
             typename=std::enable_if_t<
