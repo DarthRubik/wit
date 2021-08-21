@@ -90,9 +90,31 @@ namespace wit
             return *this;
         }
 
+        template<
+            typename cond = typename traits::propagate_on_container_move_assignment,
+            typename = std::enable_if_t<cond::value>>
         wit& operator=(wit&& other)
         {
             swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+
+            return *this;
+        }
+
+        template<
+            typename cond = typename traits::propagate_on_container_move_assignment,
+            typename T = cond,
+            typename = std::enable_if_t<!cond::value>>
+        wit& operator=(wit&& other)
+        {
+            if (other.get_allocator() == this->get_allocator())
+            {
+                swap(static_cast<host_t&>(*this), static_cast<host_t&>(other));
+            }
+            else
+            {
+                host_t copy(other, this->get_allocator());
+                swap(copy, static_cast<host_t&>(*this));
+            }
 
             return *this;
         }
