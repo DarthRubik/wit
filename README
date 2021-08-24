@@ -111,6 +111,22 @@ Any now my_string has all of the constructors/operator= that you would expect:
 
 And it also adds a free swap function that respects propagate_on_container_swap
 
+Building.
+
+To build the tests run the following commands:
+
+  # Clone the repository
+  git clone https://github.com/DarthRubik/wit.git
+  cd wit
+
+  # Gather the dependancies
+  git submodule update --init
+  mkdir build
+
+  # Configure and build
+  cmake ..
+  make
+
 Why is this named wit?
 
 It is named wit because having your "wits" around you means you are aware of
